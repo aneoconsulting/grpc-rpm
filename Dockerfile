@@ -13,9 +13,6 @@ RUN yum --disableplugin=subscription-manager update -y && \
     rpm-build \
     re2-devel \
     zlib-devel \
-    abseil-cpp-devel \
-    protobuf \
-    protobuf-compiler \
     openssl-devel
 
 # rpmdevtools is required to set up the RPM build environment and create the source tarball
@@ -23,14 +20,14 @@ RUN wget https://rpmfind.net/linux/almalinux/8.10/AppStream/ppc64le/os/Packages/
     rpm -ivh rpmdevtools-8.10-8.el8.noarch.rpm
 
 # gRPC requires c-ares >= 1.13.0 and c-ares-devel >= 1.13.0, which are not available in the default repositories, so we need to download and install them manually
-RUN wget https://rpmfind.net/linux/centos-stream/9-stream/BaseOS/x86_64/os/Packages/c-ares-1.17.1-4.el9.x86_64.rpm && \
-    rpm -ivh c-ares-1.17.1-4.el9.x86_64.rpm
-RUN wget https://rpmfind.net/linux/centos-stream/9-stream/AppStream/x86_64/os/Packages/c-ares-devel-1.17.1-4.el9.x86_64.rpm && \
-    rpm -ivh c-ares-devel-1.17.1-4.el9.x86_64.rpm
-
-# gRPC protobuf-devel which is not available in the default repositories, so we need to download and install them manually
-RUN wget https://rpmfind.net/linux/almalinux/8.10/PowerTools/x86_64/os/Packages/protobuf-devel-3.5.0-17.el8_10.x86_64.rpm && \
-    rpm -ivh protobuf-devel-3.5.0-17.el8_10.x86_64.rpm
+#RUN wget https://rpmfind.net/linux/centos-stream/9-stream/BaseOS/x86_64/os/Packages/c-ares-1.17.1-4.el9.x86_64.rpm && \
+#    rpm -ivh c-ares-1.17.1-4.el9.x86_64.rpm
+#RUN wget https://rpmfind.net/linux/centos-stream/9-stream/AppStream/x86_64/os/Packages/c-ares-devel-1.17.1-4.el9.x86_64.rpm && \
+#    rpm -ivh c-ares-devel-1.17.1-4.el9.x86_64.rpm
+#
+## gRPC protobuf-devel which is not available in the default repositories, so we need to download and install them manually
+#RUN wget https://rpmfind.net/linux/almalinux/8.10/PowerTools/x86_64/os/Packages/protobuf-devel-3.5.0-17.el8_10.x86_64.rpm && \
+#    rpm -ivh protobuf-devel-3.5.0-17.el8_10.x86_64.rpm
 
 RUN yum --disableplugin=subscription-manager clean all
 
@@ -38,7 +35,7 @@ RUN yum --disableplugin=subscription-manager clean all
 WORKDIR /root
 RUN rpmdev-setuptree
 
-ARG GRPC_VERSION=1.14.2
+ARG GRPC_VERSION=1.62.2
 WORKDIR /tmp
 RUN set -eux; \
     GRPC_DIR="grpc-${GRPC_VERSION}"; \
@@ -72,15 +69,9 @@ BuildRequires:  cmake
 BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  make
-BuildRequires:  abseil-cpp-devel
-BuildRequires:  c-ares-devel 
 BuildRequires:  openssl-devel
 BuildRequires:  re2-devel
-BuildRequires:  protobuf-devel
-BuildRequires:  protobuf-compiler
 BuildRequires:  zlib-devel
-
-Requires:       protobuf
 
 %description
 gRPC is a modern open-source high performance Remote Procedure Call (RPC)
@@ -107,14 +98,14 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
   -DgRPC_INSTALL=ON \
   -DgRPC_BUILD_TESTS=OFF \
-  -DBUILD_SHARED_LIBS=ON \
+  -DBUILD_SHARED_LIBS=OFF \
   -DgRPC_SSL_PROVIDER=package \
   -DgRPC_ZLIB_PROVIDER=package \
   -DgRPC_RE2_PROVIDER=package  \
-  -DgRPC_ABSL_PROVIDER=package \
-  -DgRPC_CARES_PROVIDER=package \
+  -DgRPC_ABSL_PROVIDER=module \
+  -DgRPC_CARES_PROVIDER=module \
   -DgRPC_RE2_PROVIDER=package \
-  -DgRPC_PROTOBUF_PROVIDER=package
+  -DgRPC_PROTOBUF_PROVIDER=module
 
 make -j 6
 
@@ -126,34 +117,31 @@ make install DESTDIR=%{buildroot}
 %files
 %license LICENSE
 %doc README.md
+%doc %{_datadir}/man/
 
 %{_bindir}/grpc_*
-%{_libdir}/libgrpc*.so*
-%{_libdir}/libgpr*.so*
-%{_libdir}/libgflags*.so*
-/usr/share/grpc/roots.pem
-/usr/bin/gflags_completions.sh
-/usr/lib/libaddress_sorting.so
-
-%exclude %{_includedir}/benchmark
-%exclude /root/.cmake/*
-%exclude %{_libdir}/cmake/benchmark/*
-%exclude %{_libdir}/libbenchmark*
+%{_bindir}/protoc*
+%{_bindir}/adig
+%{_bindir}/ahost
+%{_libdir}/*.a
+%{_datadir}/grpc/roots.pem
 
 %files devel
 %{_includedir}/grpc*
-%{_includedir}/gflags/*
-%{_includedir}/benchmark/*
-
+%{_includedir}/google/
+%{_includedir}/upb/
+%{_includedir}/absl/
+%{_includedir}/ares*
+%{_includedir}/utf8*
 %{_libdir}/cmake/grpc
-%{_libdir}/cmake/gflags
-/usr/lib/pkgconfig/gflags.pc
+%{_libdir}/pkgconfig/*.pc
+%{_libdir}/cmake/*/*.cmake
 
 EOF
 
-#RUN rpmbuild -ba /root/rpmbuild/SPECS/grpc.spec && \
-#    mkdir -p /tmp/rpms && \
-#    cp /root/rpmbuild/RPMS/*/*.rpm /tmp/rpms/ && \
-#    cp /root/rpmbuild/SRPMS/*.rpm /tmp/rpms/
-#
-#VOLUME ["/tmp/rpms"]
+RUN rpmbuild -ba /root/rpmbuild/SPECS/grpc.spec && \
+    mkdir -p /tmp/rpms && \
+    cp /root/rpmbuild/RPMS/*/*.rpm /tmp/rpms/ && \
+    cp /root/rpmbuild/SRPMS/*.rpm /tmp/rpms/
+
+VOLUME ["/tmp/rpms"]
