@@ -1,5 +1,7 @@
 FROM registry.access.redhat.com/ubi8
 
+ARG PARALLEL_JOBS=4
+
 RUN rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
 
 RUN yum --disableplugin=subscription-manager update -y && \
@@ -18,16 +20,6 @@ RUN yum --disableplugin=subscription-manager update -y && \
 # rpmdevtools is required to set up the RPM build environment and create the source tarball
 RUN wget https://rpmfind.net/linux/almalinux/8.10/AppStream/ppc64le/os/Packages/rpmdevtools-8.10-8.el8.noarch.rpm && \
     rpm -ivh rpmdevtools-8.10-8.el8.noarch.rpm
-
-# gRPC requires c-ares >= 1.13.0 and c-ares-devel >= 1.13.0, which are not available in the default repositories, so we need to download and install them manually
-#RUN wget https://rpmfind.net/linux/centos-stream/9-stream/BaseOS/x86_64/os/Packages/c-ares-1.17.1-4.el9.x86_64.rpm && \
-#    rpm -ivh c-ares-1.17.1-4.el9.x86_64.rpm
-#RUN wget https://rpmfind.net/linux/centos-stream/9-stream/AppStream/x86_64/os/Packages/c-ares-devel-1.17.1-4.el9.x86_64.rpm && \
-#    rpm -ivh c-ares-devel-1.17.1-4.el9.x86_64.rpm
-#
-## gRPC protobuf-devel which is not available in the default repositories, so we need to download and install them manually
-#RUN wget https://rpmfind.net/linux/almalinux/8.10/PowerTools/x86_64/os/Packages/protobuf-devel-3.5.0-17.el8_10.x86_64.rpm && \
-#    rpm -ivh protobuf-devel-3.5.0-17.el8_10.x86_64.rpm
 
 RUN yum --disableplugin=subscription-manager clean all
 
@@ -107,7 +99,7 @@ cmake .. \
   -DgRPC_RE2_PROVIDER=package \
   -DgRPC_PROTOBUF_PROVIDER=module
 
-make -j 6
+make -j ${PARALLEL_JOBS}
 
 %install
 rm -rf %{buildroot}
@@ -123,25 +115,24 @@ make install DESTDIR=%{buildroot}
 %{_bindir}/protoc*
 %{_bindir}/adig
 %{_bindir}/ahost
+%{_bindir}/acountry
 %{_libdir}/*.a
 %{_datadir}/grpc/roots.pem
 
 %files devel
 %{_includedir}/grpc*
 %{_includedir}/google/
-%{_includedir}/upb/
 %{_includedir}/absl/
 %{_includedir}/ares*
 %{_includedir}/utf8*
+%{_includedir}/java/
 %{_libdir}/cmake/grpc
 %{_libdir}/pkgconfig/*.pc
 %{_libdir}/cmake/*/*.cmake
 
 EOF
 
-RUN rpmbuild -ba /root/rpmbuild/SPECS/grpc.spec && \
-    mkdir -p /tmp/rpms && \
-    cp /root/rpmbuild/RPMS/*/*.rpm /tmp/rpms/ && \
-    cp /root/rpmbuild/SRPMS/*.rpm /tmp/rpms/
+RUN mkdir -p /tmp/rpms/
 
-VOLUME ["/tmp/rpms"]
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["rpmbuild -ba /root/rpmbuild/SPECS/grpc.spec && cp /root/rpmbuild/RPMS/*/*.rpm /tmp/rpms/"]
