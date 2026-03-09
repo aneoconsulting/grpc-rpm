@@ -1,0 +1,41 @@
+name: Build GRPC RPMs
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build Docker Image
+        run: |
+          docker build -t grpc-rpm-builder .
+
+      - name: Run RPM Build
+        run: |
+          mkdir -p generated
+          docker run --rm -v "${{ github.workspace }}/generated:/tmp/rpms" grpc-rpm-builder
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get install gh -y
+
+      - name: Upload RPMs to Release
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        run: |
+          for rpm in generated/*.rpm; do
+            gh release upload ${{ github.ref_name }} "$rpm" --clobber
+          done
